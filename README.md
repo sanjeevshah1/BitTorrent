@@ -1,34 +1,25 @@
-[![progress-banner](https://backend.codecrafters.io/progress/bittorrent/8c5b8e60-a8ff-4381-836a-96e0f276af5a)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# Building My Own BitTorrent Using TypeScript
 
-This is a starting point for TypeScript solutions to the
-["Build Your Own BitTorrent" Challenge](https://app.codecrafters.io/courses/bittorrent/overview).
+## Overview
 
-In this challenge, you’ll build a BitTorrent client that's capable of parsing a
-.torrent file and downloading a file from a peer. Along the way, we’ll learn
-about how torrent files are structured, HTTP trackers, BitTorrent’s Peer
-Protocol, pipelining and more.
+This project is an implementation of a BitTorrent client using TypeScript and Bun.js. The goal is to understand the fundamentals of the BitTorrent protocol and build a functional client that can handle file sharing in a decentralized manner.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+## Features
 
-# Passing the first stage
+- Peer-to-peer file sharing
+- Downloading and uploading of files
+- Support for .torrent files
+- Simple user interface
 
-The entry point for your BitTorrent implementation is in `app/main.ts`. Study
-and uncomment the relevant code, and push your changes to pass the first stage:
+## Technologies Used
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
-```
+- **TypeScript**: For building a scalable and maintainable codebase.
+- **Bun.js**: As the runtime environment, providing fast performance and modern features.
+- **WebSockets**: For real-time communication between peers.
+- **HTML/CSS**: For creating the user interface.
 
-Time to move on to the next stage!
+## Installation
 
-# Stage 2 & beyond
-
-Note: This section is for stages 2 and beyond.
-
-1. Ensure you have `bun (1.1)` installed locally
-1. Run `./your_bittorrent.sh` to run your program, which is implemented in
-   `app/main.ts`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+1. Clone the repository:
+   ```bash
+   git clone git@github.com:sanjeevshah1/Bittorrent.git
