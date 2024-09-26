@@ -35,11 +35,21 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("node:fs");
 var crypto_1 = require("crypto");
 var bencodec_1 = require("bencodec");
 var decodeBencode_1 = require("./Bencode/decodeBencode");
+var net = require("node:net");
 var args = process.argv;
 if (args[2] === "decode") {
     try {
@@ -94,12 +104,12 @@ var parsePeers = function (peers) {
     var peerList = [];
     for (var i = 0; i < peers.length; i += 6) {
         // Extract 6-byte chunks
-        var ipBytes = peers.slice(i, i + 4); // First 4 bytes for IP
-        var portBytes = peers.slice(i + 4, i + 6); // Last 2 bytes for Port
+        var ipBytes = peers.subarray(i, i + 4);
+        var portBytes = peers.subarray(i + 4, i + 6);
         // Convert the IP bytes into an IPv4 address
-        var ip = Array.from(ipBytes).join('.'); // Join byte values to form the IP address
+        var ip = Array.from(ipBytes).join('.');
         // Convert the port bytes into a port number
-        var port = (portBytes[0] << 8) + portBytes[1]; // Convert bytes to a port number
+        var port = (portBytes[0] << 8) + portBytes[1];
         peerList.push("".concat(ip, ":").concat(port)); // Combine IP and port in the expected format
     }
     return peerList;
@@ -111,6 +121,23 @@ function urlEncodeHash(value) {
     }
     return result;
 }
+var fetchTracker = function (URL) { return __awaiter(void 0, void 0, void 0, function () {
+    var response, responseBuffer, decodedResponse, decodedPeers, parsedPeers;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0: return [4 /*yield*/, fetch(URL)];
+            case 1:
+                response = _a.sent();
+                return [4 /*yield*/, response.arrayBuffer()];
+            case 2:
+                responseBuffer = _a.sent();
+                decodedResponse = bencodec_1.default.decode(Buffer.from(responseBuffer));
+                decodedPeers = decodedResponse.peers;
+                parsedPeers = parsePeers(decodedPeers);
+                return [2 /*return*/, parsedPeers];
+        }
+    });
+}); };
 if (args[2] === "peers") {
     try {
         var torrentFilePath = args[3];
@@ -131,28 +158,87 @@ if (args[2] === "peers") {
         };
         console.log("The Info Hash is: ", info_hash);
         var fetchUrl = "".concat(req.trackerUrl, "?peer_id=").concat(req.peer_id, "&info_hash=").concat(req.info_hash, "&port=").concat(req.port, "&uploaded=").concat(req.uploaded, "&downloaded=").concat(req.downloaded, "&left=").concat(req.left, "&compact=").concat(req.compact);
-        var fetchTracker = function (URL) { return __awaiter(void 0, void 0, void 0, function () {
-            var response, responseBuffer, decodedResponse, decodedPeers, parsedPeers;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, fetch(URL)];
-                    case 1:
-                        response = _a.sent();
-                        return [4 /*yield*/, response.arrayBuffer()];
-                    case 2:
-                        responseBuffer = _a.sent();
-                        decodedResponse = bencodec_1.default.decode(Buffer.from(responseBuffer));
-                        console.log("Decoded Response:", decodedResponse);
-                        decodedPeers = decodedResponse.peers;
-                        console.log("Peers:", decodedPeers);
-                        console.log("Peers Length:", decodedPeers.length);
-                        parsedPeers = parsePeers(decodedPeers);
-                        console.log("Parsed Peers:", parsedPeers);
-                        return [2 /*return*/];
-                }
-            });
-        }); };
-        fetchTracker(fetchUrl);
+        fetchTracker(fetchUrl).then(function (response) {
+            console.log("Peers:", response);
+        });
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            console.log(error.message);
+        }
+        else {
+            console.log("Unknown error occurred");
+        }
+    }
+}
+function handshake(info_hash, peerId, portNumber) {
+    return __awaiter(this, void 0, void 0, function () {
+        var handshake_1, socket_1;
+        return __generator(this, function (_a) {
+            console.log("Starting handshake process...");
+            try {
+                handshake_1 = Uint8Array.from(__spreadArray(__spreadArray(__spreadArray(__spreadArray([
+                    19
+                ], (Array.from(Buffer.from("BitTorrent protocol"))), true), [0, 0, 0, 0, 0, 0, 0, 0], false), Array.from(info_hash), true), (Array.from(Buffer.from(peerId))), true));
+                console.log("Handshake payload created:", handshake_1);
+                socket_1 = new net.Socket();
+                socket_1.setTimeout(10000); // 10 seconds timeout
+                socket_1.connect(portNumber, peerId, function () {
+                    console.log("Connected to peer ".concat(peerId, ":").concat(portNumber));
+                    socket_1.write(handshake_1);
+                    console.log("Handshake sent");
+                });
+                socket_1.on("data", function (data) {
+                    console.log("Received data from peer:", data);
+                    if (data.length >= 68) { // Minimum length of a handshake response
+                        var protocol = data.toString('utf8', 1, 20);
+                        var receivedInfoHash = data.subarray(28, 48).toString('hex');
+                        var peerId_1 = data.subarray(48, 68).toString('hex');
+                        console.log("Received protocol:", protocol);
+                        console.log("Received info hash:", receivedInfoHash);
+                        console.log("Peer ID:", peerId_1);
+                        if (receivedInfoHash !== info_hash.toString('hex')) {
+                            console.error("Received info hash doesn't match our info hash");
+                        }
+                        else {
+                            console.log("Handshake successful");
+                        }
+                    }
+                    else {
+                        console.error("Received data is too short for a handshake");
+                    }
+                    socket_1.destroy();
+                });
+                socket_1.on("error", function (error) {
+                    console.error("Socket error:", error.message);
+                });
+                socket_1.on("close", function () {
+                    console.log("Connection closed");
+                });
+                socket_1.on("timeout", function () {
+                    console.error("Connection timed out");
+                    socket_1.destroy();
+                });
+            }
+            catch (error) {
+                console.error("Error in handshake process:", error);
+            }
+            return [2 /*return*/];
+        });
+    });
+}
+if (args[2] === "handshake") {
+    try {
+        var torrentFilePath = args[3];
+        var peerIdAndPort = args[4];
+        var _a = peerIdAndPort.split(":"), peerId = _a[0], port = _a[1];
+        var portNumber = parseInt(port);
+        var torrentFileData = fs.readFileSync(torrentFilePath);
+        var decodedTorrentFile = bencodec_1.default.decode(torrentFileData);
+        var fileInfo = decodedTorrentFile.info;
+        var encodedInfo = bencodec_1.default.encode(fileInfo);
+        var info_hash = (0, crypto_1.createHash)('sha1').update(encodedInfo).digest();
+        handshake(info_hash, peerId, portNumber);
     }
     catch (error) {
         if (error instanceof Error) {
