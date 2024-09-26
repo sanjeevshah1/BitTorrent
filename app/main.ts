@@ -1,8 +1,11 @@
 import * as fs from 'node:fs';
-import { createHash } from 'crypto';
-import bencodec from 'bencodec';
-import { decodeBencode } from './Bencode/decodeBencode';
 import * as net from "node:net";
+import bencodec from 'bencodec';
+import { createHash } from 'crypto';
+import { decodeBencode } from './Bencode/decodeBencode';
+import { TorrentFile, Info } from './types';
+import { extractPieceHashes, urlEncodeHash, fetchTracker } from './utils';
+
 const args = process.argv;
 
 if (args[2] === "decode") { 
@@ -17,25 +20,6 @@ if (args[2] === "decode") {
             console.log("Unknown error occurred");
         }
     }
-}
-
-function extractPieceHashes(pieces: Buffer): string[] {
-    const hashes: string[] = [];
-    for (let i = 0; i < pieces.length; i += 20) {
-        hashes.push(pieces.subarray(i, i + 20).toString('hex'));
-    }
-    return hashes;
-}
-type Info = {
-    name: string,
-    "piece length": number,
-    pieces: Buffer,
-    length: number,
-}
-
-type TorrentFile = {
-    announce: string,
-    info: Info,
 }
 
 if (args[2] === "info") {
@@ -65,48 +49,6 @@ if (args[2] === "info") {
         }
     }
 }
-const parsePeers = (peers: Buffer): string[] => {
-    const peerList: string[] = [];
-    
-    for (let i = 0; i < peers.length; i += 6) {
-        // Extract 6-byte chunks
-        const ipBytes = peers.subarray(i, i + 4); 
-        const portBytes = peers.subarray(i + 4, i + 6); 
-
-        // Convert the IP bytes into an IPv4 address
-        const ip = Array.from(ipBytes).join('.'); 
-
-        // Convert the port bytes into a port number
-        const port = (portBytes[0] << 8) + portBytes[1]; 
-
-        peerList.push(`${ip}:${port}`); // Combine IP and port in the expected format
-    }
-
-    return peerList;
-};
-
-function urlEncodeHash(value: Buffer): string {
-    let result = "";
-    for (let index = 0; index < value.length; index++) {
-      result += `%${value.subarray(index, index + 1).toString("hex")}`;
-    }
-    return result;
-  }
-
-  type DecodedResponse = {
-    peers: Buffer,
-    interval: number,
-    complete: number,
-    incomplete: number,
-}
-const fetchTracker = async (URL: string) : Promise<string[]> => {
-    const response = await fetch(URL);
-    const responseBuffer = await response.arrayBuffer();
-    const decodedResponse: DecodedResponse = bencodec.decode(Buffer.from(responseBuffer));
-    const decodedPeers = decodedResponse.peers;
-    const parsedPeers = parsePeers(decodedPeers);
-    return parsedPeers;
-};
 
 if (args[2] === "peers") {
     try {
@@ -140,6 +82,7 @@ if (args[2] === "peers") {
         }
     }
 }
+
 async function handshake(info_hash: Buffer, peerId: string, portNumber: number) {
     console.log("Starting handshake process...");
     try {
