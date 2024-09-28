@@ -163,15 +163,17 @@ const MessageTypes = [
 ] as const;
 
 async function downloadFile(hash: Buffer, peerId: string, portNumber: number, outputFilePath: string, pieceIndex: number, pieceLength: number) {
-    console.log(`${new Date().toISOString()} - Starting download process for piece ${pieceIndex}...`);
+    console.log(`${new Date().toISOString()} - Starting download process for piece ${pieceIndex} from ${peerId}:${portNumber}...`);
 
     const socket = new net.Socket();
-    socket.setTimeout(120000); // 2 minute timeout
+    socket.setTimeout(3000); // 30 seconds timeout
 
     try {
         await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
+        console.log("Output directory created or confirmed");
 
         await connectToPeer(socket, peerId, portNumber);
+        console.log("Connected to peer");
         
         const peerIdBuffer = await sendHandshake(socket, hash);
         console.log(`Handshake successful. Peer ID: ${peerIdBuffer.toString('hex')}`);
@@ -182,6 +184,7 @@ async function downloadFile(hash: Buffer, peerId: string, portNumber: number, ou
         await waitForUnchoke(socket);
         console.log("Received unchoke message");
 
+        console.log(`Requesting piece ${pieceIndex} with length ${pieceLength}`);
         const pieceData = await downloadPiece(socket, pieceIndex, pieceLength);
         console.log(`Downloaded piece ${pieceIndex}, length: ${pieceData.length}`);
 
@@ -189,9 +192,10 @@ async function downloadFile(hash: Buffer, peerId: string, portNumber: number, ou
         console.log(`Piece ${pieceIndex} saved to ${outputFilePath}`);
 
     } catch (error) {
-        console.error(`${new Date().toISOString()} - Error in download process:`, error);
-        throw error;
+        console.error(`${new Date().toISOString()} - Error in download process from ${peerId}:${portNumber}:`, error);
+        throw error; // Re-throw the error to be caught in the main loop
     } finally {
+        console.log(`Closing connection to ${peerId}:${portNumber}`);
         socket.destroy();
     }
 }
@@ -248,14 +252,29 @@ async function downloadPiece(socket: net.Socket, pieceIndex: number, pieceLength
 }
 
 function requestPiece(socket: net.Socket, index: number, begin: number, length: number): Promise<Buffer> {
-    const request = Buffer.concat([
-        Buffer.from([0, 0, 0, 13, 6]),
-        uint32ToBuffer(index),
-        uint32ToBuffer(begin),
-        uint32ToBuffer(length),
-    ]);
-    socket.write(request);
-    return waitForMessage(socket, "piece");
+    return new Promise((resolve, reject) => {
+        const request = Buffer.concat([
+            Buffer.from([0, 0, 0, 13, 6]),
+            uint32ToBuffer(index),
+            uint32ToBuffer(begin),
+            uint32ToBuffer(length),
+        ]);
+        socket.write(request);
+
+        const timeout = setTimeout(() => {
+            reject(new Error(`Timeout waiting for piece ${index} at offset ${begin}`));
+        }, 30000); // 30 seconds timeout
+
+        waitForMessage(socket, "piece")
+            .then((message) => {
+                clearTimeout(timeout);
+                resolve(message);
+            })
+            .catch((error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+    });
 }
 
 function waitForMessage(socket: net.Socket, expectedType: string): Promise<Buffer> {
@@ -323,41 +342,33 @@ async function handleDownloadPieceCommand() {
         left: fileInfo.length,
         compact: 1,
     };
-     const fetchUrl = `${req.trackerUrl}?peer_id=${req.peer_id}&info_hash=${req.encodedHash}&port=${req.port}&uploaded=${req.uploaded}&downloaded=${req.downloaded}&left=${req.left}&compact=${req.compact}`
-    const peers = await fetchTracker(fetchUrl);
-    console.log("Peers:", peers);
-    if(peers.length === 0){
-        throw new Error("No peers found");
-    }
-
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const fetchUrl = `${req.trackerUrl}?peer_id=${req.peer_id}&info_hash=${req.encodedHash}&port=${req.port}&uploaded=${req.uploaded}&downloaded=${req.downloaded}&left=${req.left}&compact=${req.compact}`
+    console.log(`Fetching peers from tracker: ${fetchUrl}`);
+    const peers = await fetchTracker(fetchUrl);
+    console.log(`Received ${peers.length} peers from tracker`);
 
     for (let i = 0; i < peers.length; i++) {
-        const [peerId, portStr] = peers[i].split(":");
-        const portNumber = parseInt(portStr, 10);
-        console.log(`Attempting to download piece ${pieceIndex} from peer ${peerId}:${portNumber} (attempt number ${i + 1}/${peers.length}) `);
+        const [peerId, port] = peers[i].split(":");
+        const portNumber = parseInt(port, 10);
+        console.log(`Attempting to download piece ${pieceIndex} from peer ${peerId}:${portNumber} (attempt number ${i + 1}/${peers.length})`);
         try {
+            console.log(`Calling downloadFile function for peer ${peerId}:${portNumber}`);
             await downloadFile(info_hash, peerId, portNumber, outputFilePath, pieceIndex, fileInfo['piece length']);
             console.log("Download process completed successfully");
             return;
         } catch (error) {
             console.error(`Failed to download from peer ${peerId}:${portNumber}:`, error);
             if(i === peers.length - 1){
+                console.error("Attempted all peers without success");
                 throw new Error("Failed to download from all available peers");
             }
+            console.log(`Waiting for 1 second before trying next peer`);
             await delay(1000);
         }
     }
 }
 
-
-
-if (args[2] === 'download') {
-    handleDownloadPieceCommand().catch(error => {
-        console.error("Error during download:", error);
-        process.exit(1);
-    });
-}
 if (args[2] === "handshake"){
     try{
         const torrentFilePath: string  = args[3];
@@ -377,4 +388,11 @@ if (args[2] === "handshake"){
             console.log("Unknown error occurred");
         }
     }
+}
+
+if (args[2] === 'download') {
+    handleDownloadPieceCommand().catch(error => {
+        console.error("Error during download:", error);
+        process.exit(1);
+    });
 }
