@@ -268,8 +268,8 @@ function waitForMessage(socket: net.Socket, expectedType: string): Promise<Buffe
             while (buffer.length > 0) {
                 if (expectedType === "handshake") {
                     if (buffer.length < 68) return;
-                    resolve(buffer.slice(0, 68));
-                    buffer = buffer.slice(68);
+                    resolve(buffer.subarray(0, 68));
+                    buffer = buffer.subarray(68);
                     return;
                 }
 
@@ -278,8 +278,8 @@ function waitForMessage(socket: net.Socket, expectedType: string): Promise<Buffe
                 if (buffer.length < messageLength + 4) return;
 
                 const messageId = buffer[4];
-                const message = buffer.slice(0, messageLength + 4);
-                buffer = buffer.slice(messageLength + 4);
+                const message = buffer.subarray(0, messageLength + 4);
+                buffer = buffer.subarray(messageLength + 4);
 
                 if (MessageTypes[messageId] === expectedType) {
                     resolve(message);
