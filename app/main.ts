@@ -176,7 +176,7 @@ async function downloadFile(hash: Buffer, peerId: string, portNumber: number, ou
         const peerIdBuffer = await sendHandshake(socket, hash);
         console.log(`Handshake successful. Peer ID: ${peerIdBuffer.toString('hex')}`);
 
-        await sendInterested(socket);
+        sendInterested(socket);
         console.log("Sent interested message");
 
         await waitForUnchoke(socket);
@@ -312,10 +312,10 @@ async function handleDownloadPieceCommand() {
     const fileInfo = decodedTorrentFile.info;
     const encodedInfo = bencodec.encode(fileInfo);
 
-    const info_hash = createHash('sha1').update(encodedInfo).digest();
+    const info_hash: Buffer = createHash('sha1').update(encodedInfo).digest();
     const req = {
         trackerUrl:  decodedTorrentFile.announce,
-        info_hash: urlEncodeHash(info_hash),
+        encodedHash: urlEncodeHash(info_hash),
         peer_id: "00112233445566778899",
         port: 6881,
         uploaded: 0,
@@ -323,23 +323,31 @@ async function handleDownloadPieceCommand() {
         left: fileInfo.length,
         compact: 1,
     };
-     const fetchUrl = `${req.trackerUrl}?peer_id=${req.peer_id}&info_hash=${req.info_hash}&port=${req.port}&uploaded=${req.uploaded}&downloaded=${req.downloaded}&left=${req.left}&compact=${req.compact}`
+     const fetchUrl = `${req.trackerUrl}?peer_id=${req.peer_id}&info_hash=${req.encodedHash}&port=${req.port}&uploaded=${req.uploaded}&downloaded=${req.downloaded}&left=${req.left}&compact=${req.compact}`
     const peers = await fetchTracker(fetchUrl);
+    console.log("Peers:", peers);
+    if(peers.length === 0){
+        throw new Error("No peers found");
+    }
 
-    for (const peer of peers) {
-        const [peerId, portStr] = peer.split(":");
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (let i = 0; i < peers.length; i++) {
+        const [peerId, portStr] = peers[i].split(":");
         const portNumber = parseInt(portStr, 10);
-
+        console.log(`Attempting to download piece ${pieceIndex} from peer ${peerId}:${portNumber} (attempt number ${i + 1}/${peers.length}) `);
         try {
             await downloadFile(info_hash, peerId, portNumber, outputFilePath, pieceIndex, fileInfo['piece length']);
             console.log("Download process completed successfully");
             return;
         } catch (error) {
             console.error(`Failed to download from peer ${peerId}:${portNumber}:`, error);
+            if(i === peers.length - 1){
+                throw new Error("Failed to download from all available peers");
+            }
+            await delay(1000);
         }
     }
-
-    throw new Error("Failed to download from all available peers");
 }
 
 
