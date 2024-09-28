@@ -12,17 +12,17 @@ export const parsePeers = (peers: Buffer): string[] => {
     const peerList: string[] = [];
     
     for (let i = 0; i < peers.length; i += 6) {
-        // Extract 6-byte chunks
+        // Extracting 6-byte chunks
         const ipBytes = peers.subarray(i, i + 4); 
         const portBytes = peers.subarray(i + 4, i + 6); 
 
-        // Convert the IP bytes into an IPv4 address
+        // Converting the IP bytes into an IPv4 address
         const ip = Array.from(ipBytes).join('.'); 
 
-        // Convert the port bytes into a port number
+        // Converting the port bytes into a port number
         const port = (portBytes[0] << 8) + portBytes[1]; 
 
-        peerList.push(`${ip}:${port}`); // Combine IP and port in the expected format
+        peerList.push(`${ip}:${port}`); // Combining IP and port to form the expected format
     }
 
     return peerList;
