@@ -207,8 +207,14 @@ export function sendKeepAlive(socket: net.Socket) {
     const keepAlive = Buffer.alloc(4);
     socket.write(keepAlive);
     console.log("Sent keep-alive message");
-}
 
+/**
+ * Establishes a connection to a peer using the given socket.
+ * @param {net.Socket} socket The socket to use for the connection.
+ * @param {string} peerId The peer ID to use for the connection.
+ * @param {number} portNumber The port number to use for the connection.
+ * @returns {Promise<void>} A promise that resolves when the connection is established.
+ */
 function connectToPeer(
     socket: net.Socket,
     peerId: string,
@@ -223,6 +229,17 @@ function connectToPeer(
     });
 }
 
+
+/**
+ * Sends a BitTorrent handshake message to a peer via a socket connection.
+ * This message initiates the communication and provides the info hash of the
+ * torrent we are interested in.
+ * @param socket - The socket connection to the peer.
+ * @param hash - The info hash of the torrent we are interested in.
+ * @returns A promise that resolves when a handshake message is received from
+ * the peer, which should contain the info hash that we are interested in.
+ */
+
 export function sendHandshake(socket: net.Socket, hash: Buffer): Promise<Buffer> {
     const handshake = Buffer.concat([
         Buffer.from([19]),
@@ -235,9 +252,23 @@ export function sendHandshake(socket: net.Socket, hash: Buffer): Promise<Buffer>
     return waitForMessage(socket, "handshake");
 }
 
+
+/**
+ * Sends an "interested" message to a peer via a socket connection.
+ * This informs the peer that we are interested in downloading from them.
+ * @param socket - The socket connection to the peer.
+ */
+
 export function sendInterested(socket: net.Socket): void {
     socket.write(Buffer.from([0, 0, 0, 1, 2]));
 }
+
+
+/**
+ * Waits for an "unchoke" message from a peer via a socket connection.
+ * @param socket - The socket connection to the peer.
+ * @returns A promise that resolves when an "unchoke" message is received, allowing further communication.
+ */
 
 export function waitForUnchoke(socket: net.Socket): Promise<void> {
     return new Promise<void>(async (resolve) => {
@@ -246,6 +277,15 @@ export function waitForUnchoke(socket: net.Socket): Promise<void> {
         resolve();
     });
 }
+
+/**
+ * Downloads a piece from a peer.
+ * 
+ * @param socket The connected socket to the peer.
+ * @param pieceIndex The index of the piece to download.
+ * @param pieceLength The length of the piece to download.
+ * @returns A promise that resolves with the downloaded piece as a Buffer.
+ */
 
 export async function downloadPiece(
     socket: net.Socket,
@@ -292,6 +332,16 @@ export async function downloadPiece(
     return completePiece;
 }
 
+
+/**
+ * Requests a piece from a peer.
+ * @param socket The connected socket to the peer.
+ * @param index The index of the piece to request.
+ * @param begin The starting offset of the piece to request.
+ * @param length The length of the piece to request.
+ * @returns A promise that resolves with the requested piece or rejects with an error.
+ */
+
 function requestPiece(
     socket: net.Socket,
     index: number,
@@ -322,6 +372,16 @@ function requestPiece(
             });
     });
 }
+
+/**
+ * Waits for a message of a given type from a socket.
+ * @param socket the socket to listen to
+ * @param expectedType the type of message to wait for, must be one of:
+ *   "handshake", "choke", "unchoke", "interested", "not interested", "have", "bitfield",
+ *   "request", "piece", "cancel"
+ * @returns a promise that resolves with the received message, or rejects with an error
+ */
+
 function waitForMessage(socket: net.Socket, expectedType: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
         let buffer = Buffer.alloc(0);
@@ -358,12 +418,31 @@ function waitForMessage(socket: net.Socket, expectedType: string): Promise<Buffe
     });
 }
 
+
+/**
+ * Converts an unsigned 32-bit integer to a 4-byte Buffer.
+ * The buffer is in big-endian byte order (most significant byte first).
+ * @param num The number to convert.
+ * @returns A Buffer containing the 4 bytes of the integer.
+ */
+
 function uint32ToBuffer(num: number): Buffer {
     const buf = Buffer.alloc(4);
     buf.writeUInt32BE(num);
     return buf;
 }
 const args = process.argv;
+
+/**
+ * Handles the download of a specific piece from available peers.
+ * 
+ * It first checks the existence of the torrent file, reads the torrent file data, decodes it, and calculates the info hash.
+ * Then, it forms a request object with the necessary information for fetching peers from the tracker.
+ * For each peer, it attempts to download the specified piece, handling errors and retrying connections if needed.
+ * 
+ * @returns {Promise<void>} A promise that resolves once the download process is completed successfully.
+ */
+
 export async function handleDownloadPieceCommand() {
     const torrentFilePath = args[5];
     const outputFilePath = args[4];
