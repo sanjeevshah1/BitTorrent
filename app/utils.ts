@@ -1,9 +1,6 @@
 import { DecodedResponse } from "./types";
 import bencodec from 'bencodec';
-import * as path from 'path';
-import * as fs from 'node:fs';
-import * as net from "node:net";
-import { createHash } from 'crypto';
+
 export function extractPieceHashes(pieces: Buffer): string[] {
     const hashes: string[] = [];
     for (let i = 0; i < pieces.length; i += 20) {
@@ -46,6 +43,7 @@ export const fetchTracker = async (URL: string) : Promise<string[]> => {
     const decodedPeers = decodedResponse.peers;
     const parsedPeers = parsePeers(decodedPeers);
     return parsedPeers;
+<<<<<<< HEAD
 };
 
 export async function handshake(hash: Buffer, peerId: string, portNumber: number) {
@@ -492,3 +490,6 @@ export async function handleDownloadPieceCommand() {
         }
     }
 }
+=======
+};
+>>>>>>> parent of 3a73f64 (moved to utils)
