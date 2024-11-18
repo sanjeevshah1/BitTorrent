@@ -7,6 +7,11 @@ import { decodeBencode } from './Bencode/decodeBencode';
 import { TorrentFile, Info } from './types';
 import { extractPieceHashes, urlEncodeHash, fetchTracker } from './utils';
 
+const color = require('colors-cli/toxic')
+const loading =  require('loading-cli');
+const load = loading("").start()
+load.stop();
+
 const args = process.argv;
 
 if (args[2] === "decode") { 
@@ -182,7 +187,7 @@ async function downloadFile(
     pieceCount: number,
 ) {
 
-    console.log(`Date & Time: ${new Date().toISOString()} - Starting download process for file from ${peerId}:${portNumber}...`);
+    console.log(`\nDate & Time: ${new Date().toISOString()} - Starting download process for file from ${peerId}:${portNumber}...\n`);
 
     let socket: net.Socket | null = null;
     let keepAliveInterval: NodeJS.Timeout | null = null;
@@ -224,12 +229,15 @@ async function downloadFile(
                     }
 
                     // Download the piece data
+                    // load.text = `Downloading piece ${i}...`;
+
+                    const load = loading(`Downloading...`).start()
+                    load.text = `Downloading piece ${i}...`;
                     const pieceData = await downloadPiece(socket, i, adjustedPieceLength);
-                    // console.log(`Downloaded piece ${i}, length: ${pieceData.length}`);
 
                     // Append the piece data to the output file
                     await fs.promises.appendFile(outputFilePath, pieceData);
-                    console.log(`Piece ${i} saved to ${outputFilePath}`);
+                    load.succeed(`Piece ${i} saved to ${outputFilePath}`.green).stop()
 
                     // Reset reconnect attempts after successful download
                     reconnectAttempts = 0;
@@ -247,6 +255,7 @@ async function downloadFile(
                     }
                   
                 } finally {
+                    load.stop();
                     if (keepAliveInterval !== null) {
                         clearInterval(keepAliveInterval);
                     }
@@ -490,7 +499,6 @@ async function handleDownloadPieceCommand() {
         try {
             // console.log(`Calling downloadFile function for peer ${peerId}:${portNumber}`);
             await downloadFile(info_hash, peerId, portNumber, outputFilePath,fileInfo['piece length'], fileInfo.length, pieceCount);
-            console.log("Download process completed successfully");
             return;
         } catch (error) {
             console.error(`Failed to download from peer ${peerId}:${portNumber}:`, error);
@@ -499,7 +507,7 @@ async function handleDownloadPieceCommand() {
                 console.error("Attempted all peers without success");
                 throw new Error("Failed to download from all available peers");
             }
-            
+
             console.log(`Waiting for 3 second before trying next peer`);
             await delay(3000);
         }
@@ -528,8 +536,15 @@ if (args[2] === "handshake"){
 }
 
 if (args[2] === 'download') {
-    handleDownloadPieceCommand().catch(error => {
-        console.error("Error during download:", error);
-        process.exit(1);
-    });
+    handleDownloadPieceCommand()
+        .catch(error => {
+            console.error("Error during download:", error);
+            process.exit(1);
+        })
+        .finally(() => {
+            const load = loading("Downloading").start();
+            console.log("\n");
+            load.succeed("Download completed successfully!!!".cyan);
+            console.log("\n");
+        });
 }
