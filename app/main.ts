@@ -237,6 +237,8 @@ async function downloadFile(
 
                     // Append the piece data to the output file
                     await fs.promises.appendFile(outputFilePath, pieceData);
+                    
+                    // @ts-expect-error
                     load.succeed(`Piece ${i} saved to ${outputFilePath}`.green).stop()
 
                     // Reset reconnect attempts after successful download
@@ -544,6 +546,8 @@ if (args[2] === 'download') {
         .finally(() => {
             const load = loading("Downloading").start();
             console.log("\n");
+            
+        // @ts-expect-error
             load.succeed("Download completed successfully!!!".cyan);
             console.log("\n");
         });
