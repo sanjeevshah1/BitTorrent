@@ -207,7 +207,7 @@ async function downloadFile(
                 console.log(`Requesting piece ${pieceIndex} with length ${pieceLength}`);
                 const pieceData = await downloadPiece(socket, pieceIndex, adjustedPieceLength);
                 console.log(`Downloaded piece ${pieceIndex}, length: ${pieceData.length}`);
-
+                // let newOutputFilePath = `.${outputFilePath}`;
                 await fs.promises.writeFile(outputFilePath, pieceData);
                 console.log(`Piece ${pieceIndex} saved to ${outputFilePath}`);
 
@@ -395,9 +395,9 @@ function uint32ToBuffer(num: number): Buffer {
 }
 
 async function handleDownloadPieceCommand() {
-    const torrentFilePath = args[5];
-    const outputFilePath = args[4];
-    const pieceIndex = parseInt(args[6], 10);
+    const torrentFilePath = args[4];
+    const pieceIndex = parseInt(args[5], 10);
+    const outputFilePath = `./Download/piece-${pieceIndex}.txt`;
     if (!fs.existsSync(torrentFilePath)) {
         throw new Error(`Torrent file not found: ${torrentFilePath}`);
     }
