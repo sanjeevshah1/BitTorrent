@@ -32,11 +32,12 @@ if (args[2] === "info") {
         const encodedInfo: Buffer |string = bencodec.encode(fileInfo);
         const infoHash:string = createHash('sha1').update(encodedInfo).digest('hex');
         const pieceHashes: string[] = extractPieceHashes(fileInfo.pieces);
-
         console.log(`Tracker URl: ${decodedTorrentFile.announce}`);
+        console.log(`Name: ${fileInfo.name}`);
         console.log(`Length:`,fileInfo.length);
         console.log(`Info Hash: ${infoHash}`);
         console.log("Piece Length:",fileInfo["piece length"]);
+        console.log("Piece Count",pieceHashes.length);
         console.log("Piece Hashes:");
         pieceHashes.forEach((hash, index) => {
             console.log(index + 1,":",hash);
@@ -161,81 +162,189 @@ const MessageTypes = [
   "handshake",
 ] as const;
 
+// async function downloadFile(
+//     hash: Buffer,
+//     peerId: string,
+//     portNumber: number,
+//     outputFilePath: string,
+//     // pieceIndex: number,
+//     pieceLength: number,
+//     totalFileSize: number,
+//     pieceCount: number,
+// ) {
+//     console.log(`${new Date().toISOString()} - Starting download process for file from ${peerId}:${portNumber}...`);
+
+//     let socket: net.Socket | null = null;
+//     let keepAliveInterval: NodeJS.Timeout | null = null;
+//     const maxReconnectAttempts = 3;
+//     let reconnectAttempts = 0;
+//     for(let i = 0; i <= pieceCount; i++) {
+//         if(i === pieceCount) return;
+//         try {
+//         await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
+//         console.log("Output directory created or confirmed");
+
+//         while (reconnectAttempts < maxReconnectAttempts) {
+            
+//                 try {
+//                     socket = new net.Socket();
+//                     socket.setTimeout(60000); // 60 seconds timeout
+
+//                     await connectToPeer(socket, peerId, portNumber);
+//                     console.log("Connected to peer");
+                    
+//                     const peerIdBuffer = await sendHandshake(socket, hash);
+//                     console.log(`Handshake successful. Peer ID: ${peerIdBuffer.toString('hex')}`);
+                    
+//                     sendInterested(socket);
+//                     // console.log("Sent interested message");
+                    
+//                     await waitForUnchoke(socket);
+//                     // console.log("Received unchoke message");
+                    
+//                     // Start sending keep-alive messages
+//                     keepAliveInterval = setInterval(() => sendKeepAlive(socket!), 15000);
+                    
+//                     // If it's the last piece, calculate the correct size
+//                     const remainingBytes = totalFileSize - (i * pieceLength);
+//                     const adjustedPieceLength = Math.min(pieceLength, remainingBytes);
+//                     // console.log(`Requesting piece ${i} with length ${adjustedPieceLength}`);
+                    
+//                     if (adjustedPieceLength <= 0) {
+//                         console.log(`Skipping piece ${i} as it has no data`);
+//                         continue;
+//                     }
+
+//                     const pieceData = await downloadPiece(socket, i, adjustedPieceLength);
+//                     // console.log(`Downloaded piece ${i}, length: ${pieceData.length}`);
+//                     // await fs.promises.writeFile(outputFilePath, pieceData);
+//                     await fs.promises.appendFile(outputFilePath, pieceData);
+//                     console.log(`Piece ${i} saved to ${outputFilePath}`);
+                    
+//                     reconnectAttempts = 0;
+//                     break;
+//             } catch (error) {
+//                 // console.error(`${new Date().toISOString()} - Error in download process from ${peerId}:${portNumber}:`, error);
+//                 reconnectAttempts++;
+//                 if (reconnectAttempts < maxReconnectAttempts) {
+//                     console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})`);
+//                     await new Promise(resolve => setTimeout(resolve, 5000 * reconnectAttempts));
+//                 }
+//             } finally {
+//                 if (keepAliveInterval !== null) {
+//                     clearInterval(keepAliveInterval);
+//                 }
+//                 if (socket) {
+//                     socket.destroy();
+//                     console.log(`Closed connection to ${peerId}:${portNumber}`);
+//                 }
+//             }
+//         }
+//         throw new Error(`Failed to download piece ${i} after ${maxReconnectAttempts} reconnection attempts`);
+//     } catch (error) {
+//         // console.error(`${new Date().toISOString()} - Fatal error in download process:`, error);
+//         throw error;
+//     }
+// }
+// }
+
 async function downloadFile(
     hash: Buffer,
     peerId: string,
     portNumber: number,
     outputFilePath: string,
-    pieceIndex: number,
     pieceLength: number,
-    totalFileSize: number
+    totalFileSize: number,
+    pieceCount: number,
 ) {
-    console.log(`${new Date().toISOString()} - Starting download process for piece ${pieceIndex} from ${peerId}:${portNumber}...`);
+    console.log(`${new Date().toISOString()} - Starting download process for file from ${peerId}:${portNumber}...`);
 
     let socket: net.Socket | null = null;
     let keepAliveInterval: NodeJS.Timeout | null = null;
     const maxReconnectAttempts = 3;
-    let reconnectAttempts = 0;
 
-    try {
-        await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
-        console.log("Output directory created or confirmed");
+    for (let i = 0; i < pieceCount; i++) {
+        let reconnectAttempts = 0;
 
-        while (reconnectAttempts < maxReconnectAttempts) {
-            try {
-                socket = new net.Socket();
-                socket.setTimeout(60000); // 60 seconds timeout
+        try {
+            await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
+            console.log("Output directory created or confirmed");
 
-                await connectToPeer(socket, peerId, portNumber);
-                console.log("Connected to peer");
-                
-                const peerIdBuffer = await sendHandshake(socket, hash);
-                console.log(`Handshake successful. Peer ID: ${peerIdBuffer.toString('hex')}`);
+            while (reconnectAttempts < maxReconnectAttempts) {
+                try {
+                    socket = new net.Socket();
+                    socket.setTimeout(60000); // 60 seconds timeout
 
-                sendInterested(socket);
-                console.log("Sent interested message");
+                    await connectToPeer(socket, peerId, portNumber);
+                    console.log("Connected to peer");
 
-                await waitForUnchoke(socket);
-                console.log("Received unchoke message");
+                    const peerIdBuffer = await sendHandshake(socket, hash);
+                    console.log(`Handshake successful. Peer ID: ${peerIdBuffer.toString('hex')}`);
 
-                // Start sending keep-alive messages
-                keepAliveInterval = setInterval(() => sendKeepAlive(socket!), 15000);
+                    sendInterested(socket);
 
-                // If it's the last piece, calculate the correct size
-                const remainingBytes = totalFileSize - (pieceIndex * pieceLength);
-                const adjustedPieceLength = Math.min(pieceLength, remainingBytes);
-                console.log(`Requesting piece ${pieceIndex} with length ${pieceLength}`);
-                const pieceData = await downloadPiece(socket, pieceIndex, adjustedPieceLength);
-                console.log(`Downloaded piece ${pieceIndex}, length: ${pieceData.length}`);
-                // let newOutputFilePath = `.${outputFilePath}`;
-                await fs.promises.writeFile(outputFilePath, pieceData);
-                console.log(`Piece ${pieceIndex} saved to ${outputFilePath}`);
+                    await waitForUnchoke(socket);
 
-                return; // Success, exit the function
-            } catch (error) {
-                console.error(`${new Date().toISOString()} - Error in download process from ${peerId}:${portNumber}:`, error);
-                reconnectAttempts++;
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})`);
-                    await new Promise(resolve => setTimeout(resolve, 5000 * reconnectAttempts));
-                }
-            } finally {
-                if (keepAliveInterval !== null) {
-                    clearInterval(keepAliveInterval);
-                }
-                if (socket) {
-                    socket.destroy();
-                    console.log(`Closed connection to ${peerId}:${portNumber}`);
+                    // Start sending keep-alive messages
+                    keepAliveInterval = setInterval(() => sendKeepAlive(socket!), 15000);
+
+                    // Calculate the correct size for the current piece
+                    const remainingBytes = totalFileSize - (i * pieceLength);
+                    const adjustedPieceLength = Math.min(pieceLength, remainingBytes);
+
+                    if (adjustedPieceLength <= 0) {
+                        console.log(`Skipping piece ${i} as it has no data`);
+                        continue;
+                    }
+
+                    // Download the piece data
+                    const pieceData = await downloadPiece(socket, i, adjustedPieceLength);
+                    console.log(`Downloaded piece ${i}, length: ${pieceData.length}`);
+
+                    // Append the piece data to the output file
+                    await fs.promises.appendFile(outputFilePath, pieceData);
+                    console.log(`Piece ${i} saved to ${outputFilePath}`);
+
+                    // Reset reconnect attempts after successful download
+                    reconnectAttempts = 0;
+                    break;
+                } catch (error: unknown) {
+                    if(error instanceof Error) {
+                        reconnectAttempts++;
+                        console.log(`Error downloading piece ${i}: ${error.message}. Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                        await new Promise(resolve => setTimeout(resolve, 5000 * reconnectAttempts));
+                    }
+                    else{
+                        console.log("Unknown error occurred");
+                    }
+                  
+                } finally {
+                    if (keepAliveInterval !== null) {
+                        clearInterval(keepAliveInterval);
+                    }
+                    if (socket) {
+                        socket.destroy();
+                        console.log(`Closed connection to ${peerId}:${portNumber}`);
+                    }
                 }
             }
-        }
-        throw new Error(`Failed to download piece ${pieceIndex} after ${maxReconnectAttempts} reconnection attempts`);
-    } catch (error) {
-        console.error(`${new Date().toISOString()} - Fatal error in download process:`, error);
-        throw error;
-    }
-}
 
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                throw new Error(`Failed to download piece ${i} after ${maxReconnectAttempts} attempts`);
+            }
+        } catch (error: unknown) {
+            if(error instanceof Error){
+                console.error(`${new Date().toISOString()} - Fatal error in download process: ${error.message}`);
+                throw error;
+            } else{
+                console.log("Unknown error occurred");
+            }
+            
+        }
+    }
+
+    console.log("Download process completed successfully");
+}
 function sendKeepAlive(socket: net.Socket) {
     const keepAlive = Buffer.alloc(4);
     socket.write(keepAlive);
@@ -300,12 +409,12 @@ async function downloadPiece(
             left -= content.length;
             offset += content.length;
             retries = 0;
-            console.log(`Downloaded chunk: offset ${offset}, length ${content.length}`);
+            // console.log(`Downloaded chunk: offset ${offset}, length ${content.length}`);
         } catch (error) {
-            console.error(`Error downloading chunk at offset ${offset}: ${error}`);
+            // console.error(`Error downloading chunk at offset ${offset}: ${error}`);
             retries++;
             if (retries < maxRetries) {
-                console.log(`Retrying download of chunk at offset ${offset} (attempt ${retries}/${maxRetries})`);
+                // console.log(`Retrying download of chunk at offset ${offset} (attempt ${retries}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, 2000 * retries)); // Exponential backoff
             } else {
                 throw new Error(`Failed to download chunk at offset ${offset} after ${maxRetries} attempts`);
@@ -395,9 +504,7 @@ function uint32ToBuffer(num: number): Buffer {
 }
 
 async function handleDownloadPieceCommand() {
-    const torrentFilePath = args[4];
-    const pieceIndex = parseInt(args[5], 10);
-    const outputFilePath = `./Download/piece-${pieceIndex}.txt`;
+    const torrentFilePath = args[3];
     if (!fs.existsSync(torrentFilePath)) {
         throw new Error(`Torrent file not found: ${torrentFilePath}`);
     }
@@ -405,6 +512,8 @@ async function handleDownloadPieceCommand() {
     const decodedTorrentFile = bencodec.decode(torrentFileData) as { info: any, announce: string };
     const fileInfo = decodedTorrentFile.info;
     const encodedInfo = bencodec.encode(fileInfo);
+    const pieceHashes: string[] = extractPieceHashes(fileInfo.pieces);
+    const pieceCount = pieceHashes.length;
 
     const info_hash: Buffer = createHash('sha1').update(encodedInfo).digest();
     const req = {
@@ -422,14 +531,14 @@ async function handleDownloadPieceCommand() {
     console.log(`Fetching peers from tracker: ${fetchUrl}`);
     const peers = await fetchTracker(fetchUrl);
     console.log(`Received ${peers.length} peers from tracker`);
-
+    const outputFilePath = `./Download/${fileInfo.name}`;
     for (let i = 0; i < peers.length; i++) {
         const [peerId, port] = peers[i].split(":");
         const portNumber = parseInt(port, 10);
-        console.log(`Attempting to download piece ${pieceIndex} from peer ${peerId}:${portNumber} (attempt number ${i + 1}/${peers.length})`);
+        console.log(`Attempting to download file from peer ${peerId}:${portNumber} (attempt number ${i + 1}/${peers.length})`);
         try {
             console.log(`Calling downloadFile function for peer ${peerId}:${portNumber}`);
-            await downloadFile(info_hash, peerId, portNumber, outputFilePath, pieceIndex, fileInfo['piece length'], fileInfo.length);
+            await downloadFile(info_hash, peerId, portNumber, outputFilePath,fileInfo['piece length'], fileInfo.length, pieceCount);
             console.log("Download process completed successfully");
             return;
         } catch (error) {
