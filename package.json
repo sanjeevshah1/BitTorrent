@@ -10,7 +10,8 @@
         "bencodec": "^3.0.1",
         "bencoding": "^0.0.1",
         "fs-extra": "^11.2.0",
-        "js-sha1": "^0.7.0"
+        "js-sha1": "^0.7.0",
+        "loading-cli": "^1.1.2"
     },
     "devDependencies": {
         "@types/bencode": "^2.0.4",
